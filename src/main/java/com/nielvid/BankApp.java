@@ -1,6 +1,6 @@
+package com.nielvid;
 
-import services.impl.AccountServiceImpl;
-
+import com.nielvid.services.impl.AccountServiceImpl;
 
 public class BankApp {
 

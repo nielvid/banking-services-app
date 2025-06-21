@@ -1,4 +1,4 @@
-package model;
+package com.nielvid.model;
 
 public enum AccountType {
     CHECKING,

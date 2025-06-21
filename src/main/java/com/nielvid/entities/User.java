@@ -1,7 +1,10 @@
-package model;
+package com.nielvid.entities;
+
+import java.util.Random;
 
 public class User {
     private int id;
+    private String clientId;
     private String firstName;
     private String lastName;
     private String email;
@@ -17,6 +20,7 @@ public class User {
     public User(){}
 
     public User(String firstName, String lastName, String email, String phone){
+        this.clientId = String.valueOf(100000000L + (long) (new Random().nextDouble() * (999999999L - 100000000L)));
         this.firstName = firstName;
         this.lastName = lastName;
         this.email  = email;
@@ -31,6 +35,14 @@ public class User {
         this.id = id;
     }
 
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
+    }
     public String getFirstName() {
         return firstName;
     }

@@ -1,7 +1,12 @@
-package model;
+package com.nielvid.entities;
 
 import java.math.BigDecimal;
 import java.util.Random;
+
+import com.nielvid.model.AccountStatus;
+import com.nielvid.model.AccountType;
+
+
 
 public class Account {
 
@@ -11,20 +16,19 @@ public class Account {
     private BigDecimal balance;
     private AccountType accountType;
     private AccountStatus status;
-
+    private String pin;
 
     public Account() {
     }
 
-    public Account( User user, AccountType accountType) {
+    public Account(User user, AccountType accountType) {
         this.user = user;
-        this.accountNumber = new Random().nextLong(1000000000, 9999999999L) ;
+        this.accountNumber = 1000000000L + (long) (new Random().nextDouble() * (9999999999L - 1000000000L));
         this.accountName = user.getFirstName() + " " + user.getLastName();
         this.balance = BigDecimal.valueOf(0.00);
         this.accountType = accountType;
         this.status = AccountStatus.ACTIVE;
     }
-
 
     private int id;
 
@@ -84,6 +88,13 @@ public class Account {
         this.status = status;
     }
 
+    public String getPin() {
+        return pin;
+    }
 
+    public void setPin(String pin) {
+        String masked = "****";
+        this.pin = pin + masked;
+    }
 
 }
