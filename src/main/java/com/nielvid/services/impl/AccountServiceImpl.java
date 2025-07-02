@@ -1,55 +1,88 @@
 package com.nielvid.services.impl;  
 
+import com.nielvid.dao.AccountDaoImpl;
 import com.nielvid.services.AccountService;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Scanner;
 
 import com.nielvid.entities.Account;
 import com.nielvid.entities.User;
 import com.nielvid.model.AccountType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AccountServiceImpl implements AccountService {
+    private static final Logger log = LoggerFactory.getLogger(AccountServiceImpl.class);
     private final String PIN_OK = "OK";
     private final String INVALID_PIN = "Invalid PIN. Please try again.";
     private final String INVALID_ACCOUNT_NUMBER = "Invalid account number. Please try again.";
     private final String INSUFFICIENT_FUNDS = "Insufficient funds. Please try again.";
     private final String INVALID_PIN_LENGTH_OR_FORMAT = "Invalid PIN. Must be exactly 4 digits.";
 
-    private final int MAX_PIN_ATTEMPTS = 3;
 
     private final UserServiceImpl userService;
     public AccountServiceImpl(){
        this.userService = new UserServiceImpl();
     }
+    private final AccountDaoImpl accountDaoImpl = new AccountDaoImpl();
 
-    Scanner scanner  = new Scanner(System.in);
 
-    public void accountOpeningOperation() {
+    public void openingAccount() {
+    try{
+        Scanner scanner  = new Scanner(System.in);
         User user = userService.createUser();
-        System.out.println("Enter the type of account you want to create: ");
+        displayAccountType();
+        System.out.println("Enter the type of account you want to open: ");
         String accountType = scanner.next();
         Account account = openAccount(user, accountType);
-
-        System.out.println("Set Transaction PIN for your account: ");
-        System.out.println("Enter 4-digits PIN: ");
-        String pin = scanner.nextLine();
-        setAccountPIN(account, pin);
+        setAccountPIN(account.getAccountNumber());
         System.out.println("Fund your account with a minimum of $100");
         System.out.println("Enter the amount you want to deposit: ");
         double amount = scanner.nextDouble();
         initialDeposit(account, amount);
         doSomethingElse();
+    } catch (RuntimeException e) {
+        throw new RuntimeException(e);
+    }
     }
 
 
+    private void displayAccountType(){
+        List<AccountType> accountTypes = Arrays.asList(AccountType.values());
+        System.out.println("Account Types " +  accountTypes );
+    }
+    public void setAccountPIN(String accountNumber){
+        try{
+            Scanner scanner  = new Scanner(System.in);
+            System.out.println("Set Transaction PIN for your account: ");
+            System.out.println("Enter 4-digits PIN: ");
+            String pin = scanner.nextLine();
+            if (pin.length() == 4 && pin.matches("\\d{4}")) {
+                System.out.println("PIN OK" );
+            } else {
+                System.out.println(INVALID_PIN_LENGTH_OR_FORMAT);
+            }
+            int count = accountDaoImpl.updateAccountPIN(accountNumber, maskPin(pin));
+            if(count > 0){
+                System.out.println("PIN set successfully");
+            }else{
+                System.out.println("PIN not set");
+            }
+        }
+        catch (Exception e){
+            throw  new RuntimeException(e.getMessage());
+        }
+    }
+
     public void deposit() {
+        Scanner scanner  = new Scanner(System.in);
         System.out.println("Enter your account number: ");
-        int accountNumber = scanner.nextInt();
-       if(!validateAccountOwnership(accountNumber)){
+        long accountNumber = scanner.nextLong();
+       if(validateAccountOwnership(accountNumber)){
            System.exit(1);
        }
         System.out.println("Enter the amount you want to deposit: ");
@@ -60,9 +93,10 @@ public class AccountServiceImpl implements AccountService {
 
 
     public void withdraw() {
+        Scanner scanner  = new Scanner(System.in);
         System.out.println("Enter your account number: ");
-        int accountNumber = scanner.nextInt();
-        if(!validateAccountOwnership(accountNumber)){
+        long accountNumber = scanner.nextLong();
+        if(validateAccountOwnership(accountNumber)){
             System.exit(1);
         }
         System.out.println("Enter the amount you want to withdraw: ");
@@ -72,16 +106,19 @@ public class AccountServiceImpl implements AccountService {
     }
 
     public void checkBalance() {
+        Scanner scanner  = new Scanner(System.in);
         System.out.println("Enter your account number: ");
-        int accountNumber = scanner.nextInt();
-        viewBalance(accountNumber);
+        long accountNumber = scanner.nextLong();
+        BigDecimal acctBalance =  viewBalance(accountNumber);
+        log.info("Your account balance is  : {}", acctBalance);
         doSomethingElse();
     }
 
     public void transfer() {
+        Scanner scanner  = new Scanner(System.in);
         System.out.println("Enter your account number: ");
-        int accountNumber = scanner.nextInt();
-        if(!validateAccountOwnership(accountNumber)){
+        long accountNumber = scanner.nextLong();
+        if(validateAccountOwnership(accountNumber)){
             System.exit(1);
         }
         System.out.println("Enter the amount you want to transfer: ");
@@ -93,6 +130,12 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public Account openAccount(User user, String accountTypeString) {
+
+        boolean userExist = userService.userExist(user);
+        if(userExist){
+            System.out.println("Account already exist for this user");
+            doSomethingElse();
+        }
         boolean isValidAccountType = isValidAccountType(accountTypeString);
         if (!isValidAccountType) {
             System.out.println("Invalid account type");
@@ -105,158 +148,129 @@ public class AccountServiceImpl implements AccountService {
             System.out.println("the accountType is invalid, it should be any of : " +  accountTypes );
             System.exit(1);
         }
-        Account account = new Account(user, accountType);
-        accountDB.add(account);
-        System.out.println("Account created successfully!");
-        System.out.println("Your account name is: \n  " + account.getAccountName());
-        System.out.println("Your account number is: \n  " + account.getAccountNumber());
-        return account;
+
+       try{
+           Account account = accountDaoImpl.create(user, accountType);
+           System.out.println("Account created successfully!");
+           System.out.println("Your account name is: \n  " + account.getAccountName());
+           System.out.println("Your account number is: \n  " + account.getAccountNumber());
+           return account;
+       } catch (Exception e) {
+           throw new RuntimeException(e);
+       }
     }
 
     public void initialDeposit(Account account, double amount) {
-        while (amount <= 100) {
-            System.out.println("Invalid amount. Please enter amount greater than $100.");
+        while (amount < 100) {
+            Scanner scanner  = new Scanner(System.in);
+            System.out.println("Invalid amount. Minimum initial deposit cannot be less than $100.");
             System.out.println("Enter the amount you want to deposit: ");
             amount = scanner.nextDouble();
         }
-        BigDecimal accountBalance = account.getBalance().add(BigDecimal.valueOf(amount));
-        account.setBalance(accountBalance);
+        accountDaoImpl.depositFund(account.getAccountNumber(), amount);
         System.out.printf("%.2f deposited successfully into your account %s%n",amount, account.getAccountNumber());
     }
 
     @Override
-    public void makeDeposit(int accountNumber, double amount) {
+    public void makeDeposit(long accountNumber, double amount) {
         while (amount <= 0) {
+            Scanner scanner  = new Scanner(System.in);
             System.out.println("Invalid amount. Please enter a positive amount.");
             System.out.println("Enter the amount you want to deposit: ");
             amount = scanner.nextDouble();
         }
-        Account account = getAccountByAccountNumber(accountNumber);
-        if (account == null) {
-            System.out.println("Account not found.");
-            return;
-        }
-        BigDecimal accountBalance = account.getBalance().add(BigDecimal.valueOf(amount));
-        account.setBalance(accountBalance);
-        System.out.printf("%.2f deposited successfully into your account %s%n",amount, account.getAccountNumber());
+        String acctNumber = String.valueOf(accountNumber);
+        accountDaoImpl.depositFund(acctNumber, amount);
+        System.out.printf("%.2f deposited successfully into your account %s%n",amount, accountNumber);
     }
 
 
     @Override
-    public void withdrawFund(int accountNumber, double amount) {
+    public void withdrawFund(long accountNumber, double amount) {
+        Scanner scanner  = new Scanner(System.in);
         while (amount <= 0) {
+
             System.out.println("Invalid amount. Please enter a positive amount.");
             System.out.println("Enter the amount you want to withdraw: ");
             amount = scanner.nextDouble();
         }
 
-        System.out.println("Enter your PIN: ");
-        String pin = scanner.nextLine();
-       if(!validatePin(pin).equals(PIN_OK)){
-           System.out.println(INVALID_PIN);
-           System.exit(1);
-       }
-
-        Account account = getAccountByAccountNumber(accountNumber);
-        if (account == null) {
-            System.out.println("Account not found.");
+        Optional<Account> account = accountDaoImpl.findByAccountNumber(String.valueOf(accountNumber));
+        if (account.isEmpty()) {
+            System.out.println(INVALID_ACCOUNT_NUMBER);
             return;
         }
-        String accountPin = account.getPin().substring( 0,4);
+        Account acct = account.get();
+        confirmTransactionWithPIN(acct);
 
-        if (accountPin.equals(pin)) {
-            System.out.println("PIN is correct.");
-        } else {
-            System.out.println(INVALID_PIN);
-            System.exit(1);
-        }
-
-        if( account.getBalance().compareTo(BigDecimal.valueOf(amount)) < 0){
-            System.out.println("Insufficient funds.");
+        if( acct.getBalance().compareTo(BigDecimal.valueOf(amount)) < 0){
+            System.out.println(INSUFFICIENT_FUNDS);
             return;
         }
 
-        if( account.getBalance().compareTo(BigDecimal.valueOf(amount)) == 0){
+        if( acct.getBalance().compareTo(BigDecimal.valueOf(amount)) == 0){
             System.out.println("You can't withdraw all your money. Please leave some for future needs");
             return;
         }
-        BigDecimal accountBalance = account.getBalance().subtract(BigDecimal.valueOf(amount));
-        account.setBalance(accountBalance);
-        System.out.printf("%.2f withdrawn successfully %s%n",amount);
+        accountDaoImpl.withdrawFund(String.valueOf(accountNumber), amount);
     }
 
 
     @Override
-    public BigDecimal viewBalance(int accountNumber) {
-
-        System.out.println("Enter your PIN: ");
-        String pin = scanner.nextLine();
-        if(!validatePin(pin).equals(PIN_OK)){
-            System.out.println(INVALID_PIN);
+    public BigDecimal viewBalance(long accountNumber) {
+        Optional<Account> account = accountDaoImpl.findByAccountNumber(String.valueOf(accountNumber));
+        if (account.isEmpty()) {
+            System.out.println(INVALID_ACCOUNT_NUMBER);
             System.exit(1);
         }
+        Account acct = account.get();
+        confirmTransactionWithPIN(acct);
 
-        Account account = getAccountByAccountNumber(accountNumber);
-        if (account == null) {
-            System.out.println("Account not found.");
-            return null;
-        }
-        String accountPin = account.getPin().substring( 0,4);
-
-        if (accountPin.equals(pin)) {
-            System.out.println("PIN is correct.");
-        } else {
-            System.out.println(INVALID_PIN);
-            System.exit(1);
-        }
-
-        return account.getBalance();
+        return acct.getBalance();
     }
 
 
     @Override
-    public void transferFund(int accountNumber, double amount) {
+    public void transferFund(long accountNumber, double amount) {
+        Scanner scanner  = new Scanner(System.in);
         while (amount <= 0) {
             System.out.println("Invalid amount. Please enter a positive amount.");
             System.out.println("Enter the amount you want to withdraw: ");
             amount = scanner.nextDouble();
         }
         BigDecimal bigDecimalAmount = BigDecimal.valueOf(amount);
-        Account sourceAccount = getAccountByAccountNumber(accountNumber);
-        if (sourceAccount == null) {
-            System.out.println("Account not found.");
-            return;
+        Optional<Account> account = accountDaoImpl.findByAccountNumber(String.valueOf(accountNumber));
+        if (account.isEmpty()) {
+            System.out.println(INVALID_ACCOUNT_NUMBER);
+            System.exit(1);
         }
-        if( sourceAccount.getBalance().compareTo(bigDecimalAmount) < 0){
-            System.out.println("Insufficient funds.");
+        Account sAcct = account.get();
+
+        if( sAcct.getBalance().compareTo(bigDecimalAmount) < 0){
+            System.out.println(INSUFFICIENT_FUNDS);
             return;
         }
 
-        if( sourceAccount.getBalance().compareTo(bigDecimalAmount) == 0){
+        if( sAcct.getBalance().compareTo(bigDecimalAmount) == 0){
             System.out.println("You can't transfer all your money. Please leave some for future needs");
             return;
         }
         System.out.println("Enter the beneficiary account number: ");
-        int beneficiaryAccountNumber = scanner.nextInt();
-        Account recipientAccount = getAccountByAccountNumber(beneficiaryAccountNumber);
-        if (recipientAccount == null) {
-            System.out.println("beneficiary account number not found.");
-            return;
+        long beneficiaryAccountNumber = scanner.nextLong();
+        Optional<Account> recipientAccount = accountDaoImpl.findByAccountNumber(String.valueOf(beneficiaryAccountNumber));
+
+        if (recipientAccount.isEmpty()) {
+            System.out.println("Invalid recipient account number");
+            System.exit(1);
         }
-        // Lock both accounts to ensure thread-safety during transfer
-        synchronized (sourceAccount) {
-            synchronized (recipientAccount) {
-                // Confirm the transaction
-                confirmTransaction(sourceAccount);
+        Account rAcct = recipientAccount.get();
 
-                // Perform the transfer
-                sourceAccount.setBalance(sourceAccount.getBalance().subtract(bigDecimalAmount));
-                recipientAccount.setBalance(recipientAccount.getBalance().add(bigDecimalAmount));
-
-                // Provide confirmation to the user
-                System.out.printf("%.2f transferred to account %d.%n", amount, beneficiaryAccountNumber);
-                System.out.printf("Your new balance is %.2f.%n", sourceAccount.getBalance());
-            }
+        confirmTransactionWithPIN(sAcct);
+        int count = accountDaoImpl.fundTransfer(sAcct, rAcct, amount);
+        if(count == 2){
+            System.out.printf("%.2f transferred to account %d.%n", amount, beneficiaryAccountNumber);
+        }else{
+            log.info("something went wrong");
         }
     }
 
@@ -280,17 +294,27 @@ public class AccountServiceImpl implements AccountService {
         }
     }
 
-   public void promptUserForIntendedAction(){
-        System.out.println("what would you like to do?");
-        System.out.println("1. Create a new account");
-        System.out.println("2. Deposit money");
-        System.out.println("3. Withdraw money");
-        System.out.println("4. Transfer money");
-        System.out.println("5. View account balance");
-        System.out.println("6. View transaction history");
-        System.out.println("7. Exit");
+    public void promptUserForIntendedAction(){
+        System.out.println("What would you like to do?");
+        System.out.println("Enter the number that matches what you would like to do: ");
+        System.out.print("1. Open a new account ");
+        System.out.print("     *********************************  ");
+        System.out.print("2. Deposit fund ");
+        System.out.println(" ");
+        System.out.println(" ");
+        System.out.print("3. Withdraw fund ");
+        System.out.print("          *********************************  ");
+        System.out.print("4. Transfer fund ");
+        System.out.println(" ");
+        System.out.println(" ");
+        System.out.print("5. View account balance ");
+        System.out.print("   *********************************  ");
+        System.out.print("6. View transaction history ");
+        System.out.println(" ");
+        System.out.println(" ");
+        System.out.println("7. Exit ");
 
-        System.out.println("Enter the number that matches what want to do: ");
+
         List<Integer> possibleChoices = Arrays.asList(1,2,3,4,5,6,7);
 
         Scanner scanner  = new Scanner(System.in);
@@ -298,13 +322,12 @@ public class AccountServiceImpl implements AccountService {
 
         while(!possibleChoices.contains(choice)){
             System.out.println("Invalid choice. Please try again.");
-            System.out.println("Enter the number that matches what want to do: ");
+            System.out.println("Enter the number that matches what you would like to do: ");
             choice = scanner.nextInt();
         }
-        scanner.close();
-        System.out.println("You have selected option: " + choice);
+        System.out.println("You selected option: " + choice);
         if(choice == 1){
-            accountOpeningOperation();
+            openingAccount();
         }
         if(choice == 2){
             deposit();
@@ -323,34 +346,39 @@ public class AccountServiceImpl implements AccountService {
         }
 
         if(choice == 7){
-            System.out.println("Thank you for choosing Niel Digital Bank!");
-            System.out.println("Wait while log you out...");
-           try {
-               Thread.sleep(2000);
-           } catch (InterruptedException e) {
-               throw new RuntimeException(e);
-           }
-            System.out.println("You have been logged out successfully!");
+            System.out.println("Logging out >>>>>");
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("*****************************************");
+            System.out.println("Thank you for using Niel Digital Bank!");
+            System.out.println("*****************************************");
             System.exit(0);
         }
     }
 
     private void doSomethingElse(){
+        Scanner scanner  = new Scanner(System.in);
         System.out.println("Would you like to do something else? (y/n)");
+        System.out.println("Press y for yes and n for no (y/n)");
         String answer = scanner.next();
-        if (answer.equalsIgnoreCase("y")) {
+        if (answer.equalsIgnoreCase("y") || answer.equalsIgnoreCase("yes")) {
             promptUserForIntendedAction();
         } else {
+
+            System.out.println("Wait while we log you out >>>>>");
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("*****************************************");
             System.out.println("Thank you for using Niel Digital Bank!");
+            System.out.println("*****************************************");
             System.exit(0);
         }
-    }
-
-    public Account getAccountByAccountNumber(int accountNumber) {
-      return accountDB.stream()
-                .filter(account -> account.getAccountNumber() == accountNumber)
-                .findFirst()
-                .orElse(null);
     }
 
     public void setAccountPIN(Account account, String pin) {
@@ -364,40 +392,37 @@ public class AccountServiceImpl implements AccountService {
         }
     }
 
-
-
-    private boolean validateAccountOwnership(int accountNumber) {
-
+    private boolean validateAccountOwnership(long accountNumber) {
+        Scanner scanner  = new Scanner(System.in);
         System.out.println("Enter your PIN: ");
         String pin = scanner.nextLine();
-        if(!validatePin(pin).equals(PIN_OK)){
+        if(!validatePin(pin).equals(PIN_OK)) {
+                System.out.println(INVALID_PIN);
+        }
+        Optional<Account> account = accountDaoImpl.findByAccountNumber(String.valueOf(accountNumber));
+        if (account.isEmpty()) {
+            System.out.println(INVALID_ACCOUNT_NUMBER);
+            System.exit(1);
+        }
+        Account acct = account.get();
+        String accountPin = acct.getPin().substring( 0,4);
+
+        if (!accountPin.equals(pin)) {
             System.out.println(INVALID_PIN);
             System.exit(1);
         }
 
-        Account account = getAccountByAccountNumber(accountNumber);
-        if (account == null) {
-            System.out.println("Account not found.");
-            return false;
-        }
-        String accountPin = account.getPin().substring( 0,4);
-
-        if (accountPin.equals(pin)) {
-            System.out.println("PIN is correct.");
-        } else {
-            System.out.println(INVALID_PIN);
-            System.exit(1);
-        }
-
-        return true;
+        return false;
     }
 
-    public void confirmTransaction(Account account){
+    public void confirmTransactionWithPIN(Account account){
+        Scanner scanner  = new Scanner(System.in);
         int pinAttempts = 0;
         String pin = null;
         boolean pinOk = false;
+        int MAX_PIN_ATTEMPTS = 3;
         while (pinAttempts < MAX_PIN_ATTEMPTS){
-            System.out.println("Enter your 4-digit PIN: ");
+            System.out.println("Confirm transaction with our 4-digit PIN: ");
             pin = scanner.nextLine();
             if(!validatePin(pin).equals(PIN_OK)){
                 System.out.println(INVALID_PIN);
@@ -405,7 +430,6 @@ public class AccountServiceImpl implements AccountService {
             }else{
                 String accountPin = account.getPin().substring( 0,4);
                 if (accountPin.equals(pin)) {
-                    System.out.println("PIN is correct.");
                     pinOk = true;
                     break;
                 } else {
@@ -429,6 +453,11 @@ public class AccountServiceImpl implements AccountService {
             System.out.println(INVALID_PIN_LENGTH_OR_FORMAT);
         }
         return PIN_OK;
+    }
+
+    public String maskPin(String pin) {
+        String masked = "****";
+        return pin + masked;
     }
 
 }

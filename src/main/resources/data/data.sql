@@ -15,18 +15,17 @@ CREATE TABLE users (
     UNIQUE (email)
 );
 
-CREATE INDEX idx_email ON users(email);
 
 CREATE TABLE accounts (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL, 
-    account_number BIGINT NOT NULL UNIQUE,
-    account_name VARCHAR(255) NOT NULL,
-    balance NUMERIC(20, 2) NOT NULL DEFAULT 0.00,
-    account_type VARCHAR(50) NOT NULL,
-    status VARCHAR(50) NOT NULL,
-    pin VARCHAR(255),
-    FOREIGN KEY (user_id) REFERENCES users(id)
+	id serial4 PRIMARY KEY,
+	user_id varchar NOT NULL,
+	account_number varchar NOT NUL UNIQUE,
+	account_name varchar(255) NOT NULL,
+	balance numeric(20, 2) DEFAULT 0.00 NOT NULL,
+	account_type varchar(50) NOT NULL,
+	status varchar(50) NOT NULL,
+	pin varchar(255) NULL,
+	FOREIGN KEY (user_id) REFERENCES users(client_id)
+
 );
 
--- CREATE UNIQUE INDEX idx_account_number ON accounts(account_number); //automatically created a unique index on the account_number.

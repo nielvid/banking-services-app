@@ -1,9 +1,14 @@
 package com.nielvid.services.impl;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
 
+import com.nielvid.config.DatabaseUtil;
 import com.nielvid.dao.UserDaoImpl;
 import com.nielvid.entities.User;
 
@@ -14,7 +19,7 @@ public class UserServiceImpl {
     public UserServiceImpl() {
        this.userDaoImpl = new UserDaoImpl();
     }
-    
+
 
     public User createUser() {
         Scanner scanner = new Scanner(System.in);
@@ -26,39 +31,36 @@ public class UserServiceImpl {
         String email = scanner.next();
         System.out.println("Enter your phone number: ");
         String phone = scanner.next();
-        scanner.close();
 
         if (firstName == null || lastName == null || email == null || phone == null) {
             System.out.println("Invalid input. Please provide all required information.");
         }
-        User userPayload = new User(firstName, lastName, email, phone);
-        User userExist = findOneUser(email);
-        if (userExist.getEmail() != null) {
-            System.out.println("User already exists with email: " + email);
-            System.exit(1);
-        }else{
-            System.out.println("Creating user with email: " + email);
-            userPayload = userDaoImpl.create(userPayload);
-        }
-        System.out.println("User created successfully: " + userPayload.toString());
-        return userPayload;
-
+        return new User(firstName, lastName, email, phone);
     }
 
-    public User findOneUser(String email) {
+    public User findOneUser(String id) {
         try {
-            Optional<User> user = userDaoImpl.findOne(email);
+            Optional<User> user = userDaoImpl.findOne(id);
             System.out.println("User found: " + user.orElse(null).getEmail());
             return user.orElse(null);
         } catch (Exception e) {
-            e.printStackTrace();
             throw new RuntimeException(e);
-
         }
     }
 
+    public boolean userExist(User user) {
+        Optional<User> response = userDaoImpl.userExist(user);
+        if(response.isPresent()){
+            System.out.println("User already exists: " + response.get().getEmail());
+            return true;
+        }
+        return false;
+    }
+
+    public Optional<User> findByEmail(String email) {
+            return userDaoImpl.findByEmail(email);
+    }
     public List<User> fetchAllUser() {
-            List<User> users = userDaoImpl.findAll();
-            return users;
+            return  userDaoImpl.findAll();
     }
 }

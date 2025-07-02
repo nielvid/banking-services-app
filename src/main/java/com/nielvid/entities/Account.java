@@ -10,8 +10,8 @@ import com.nielvid.model.AccountType;
 
 public class Account {
 
-    private User user;
-    private long accountNumber;
+    private String userId;
+    private String accountNumber;
     private String accountName;
     private BigDecimal balance;
     private AccountType accountType;
@@ -22,12 +22,17 @@ public class Account {
     }
 
     public Account(User user, AccountType accountType) {
-        this.user = user;
-        this.accountNumber = 1000000000L + (long) (new Random().nextDouble() * (9999999999L - 1000000000L));
+        this.userId = user.getClientId();
+        this.accountNumber = String.valueOf(1000000000L + (long) (new Random().nextDouble() * (9999999999L - 1000000000L)));
         this.accountName = user.getFirstName() + " " + user.getLastName();
         this.balance = BigDecimal.valueOf(0.00);
         this.accountType = accountType;
         this.status = AccountStatus.ACTIVE;
+    }
+     public Account(User user, String accountNumber) {
+        this.userId = user.getClientId();
+        this.accountNumber = accountNumber;
+        this.accountName = user.getFirstName() + " " + user.getLastName();
     }
 
     private int id;
@@ -40,19 +45,19 @@ public class Account {
         this.id = id;
     }
 
-    public User getUser() {
-        return user;
+    public String getUserId() {
+        return userId;
     }
 
-    public void setUser(User user) {
-        this.user = user;
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
-    public long getAccountNumber() {
+    public String getAccountNumber() {
         return accountNumber;
     }
 
-    public void setAccountNumber(long accountNumber) {
+    public void setAccountNumber(String accountNumber) {
         this.accountNumber = accountNumber;
     }
 
